@@ -33,6 +33,8 @@ module ReportPortal
           p "Group description should be at least #{MIN_DESCRIPTION_LENGTH} characters ('group_notification': #{group_notification.inspect})"
           return
         end
+        p "Group Notification #{group_notification.inspect}"
+        p "Description #{description.inspect}"
         item = ReportPortal::TestItem.new(name: description[0..MAX_DESCRIPTION_LENGTH - 1],
                                           type: :TEST,
                                           id: nil,
