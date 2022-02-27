@@ -9,8 +9,8 @@ module ReportPortal
   module RSpec
     class ParallelFormatter < Report
 
-      FILE_WITH_LAUNCH_ID = Pathname(Dir.tmpdir) + "parallel_launch_id_for_#{Process.ppid}.lck"
-      FILE_WITH_PARALLEL_GROUPS_COUNT = Pathname(Dir.tmpdir) + "parallel_groups_for_#{Process.ppid}.lck"
+      FILE_WITH_LAUNCH_ID = '/tmp/' + "parallel_launch_id_for_#{Process.ppid}.lck"
+      FILE_WITH_PARALLEL_GROUPS_COUNT = '/tmp/' + "parallel_groups_for_#{Process.ppid}.lck"
 
       @@parallel_count = ENV['PARALLEL_TEST_GROUPS'].to_i
 
