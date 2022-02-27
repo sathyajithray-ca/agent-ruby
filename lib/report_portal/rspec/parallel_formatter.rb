@@ -28,6 +28,7 @@ module ReportPortal
       end
 
       def wait_for_launch
+        p FILE_WITH_LAUNCH_ID
         until File.exist?(FILE_WITH_LAUNCH_ID) do
           p 'Sleeping'
           sleep 1
