@@ -13,6 +13,7 @@ module ReportPortal
       FILE_WITH_PARALLEL_GROUPS_COUNT = Dir.pwd + "/parallel_groups_for_#{Process.ppid}.lck"
 
       @@parallel_count = ENV['PARALLEL_TEST_GROUPS'].to_i
+      @@parallel_count_for_fininshing_launch = @@parallel_count
 
       ::RSpec::Core::Formatters.register self, :example_group_started, :example_group_finished,
                                          :example_started, :example_passed, :example_failed,
@@ -107,16 +108,14 @@ module ReportPortal
       end
 
       def example_group_finished(_group_notification)
-        # binding.pry
         if !@current_group_node.nil?
           ReportPortal.finish_item(@current_group_node.content)
           # @current_group_node = @current_group_node.parent
         end
         p "Process First Process? #{ParallelTests.first_process?}"
-        if ParallelTests.first_process?
-          p "Environment number #{ENV["TEST_ENV_NUMBER"]}"
+        if @@parallel_count_for_fininshing_launch.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i && ParallelTests.first_process?
+          @@parallel_count_for_fininshing_launch = read_parallel_groups_count
           ParallelTests.wait_for_other_processes_to_finish
-          p "Environment number #{ENV["TEST_ENV_NUMBER"]}"
           # File.delete(FILE_WITH_LAUNCH_ID)
           # unless attach_to_launch?
           $stdout.puts "Finishing launch #{ReportPortal.launch_id}"
