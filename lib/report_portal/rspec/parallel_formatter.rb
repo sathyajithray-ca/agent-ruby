@@ -113,7 +113,7 @@ module ReportPortal
           # @current_group_node = @current_group_node.parent
         end
         p "Process First Process? #{ParallelTests.first_process?}"
-        if @@parallel_count_for_fininshing_launch.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i && ParallelTests.first_process?
+        if @@parallel_count_for_fininshing_launch.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i
           @@parallel_count_for_fininshing_launch = read_parallel_groups_count
           ParallelTests.wait_for_other_processes_to_finish
           # File.delete(FILE_WITH_LAUNCH_ID)
