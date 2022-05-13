@@ -19,67 +19,31 @@ module ReportPortal
                                          :example_started, :example_passed, :example_failed,
                                          :example_pending, :message
 
-      
-      def parallel?
-        true
-      end
-
       def initialize(_output)
         ENV['REPORT_PORTAL_USED'] = 'true'
-      end
-
-      def wait_for_launch
-        p FILE_WITH_LAUNCH_ID
-        until File.exist?(FILE_WITH_LAUNCH_ID) do
-          p 'Sleeping'
-          sleep 1
-        end
-      end
-
-      def write_parallel_groups_count(count)
-        File.open(FILE_WITH_PARALLEL_GROUPS_COUNT, 'w+') do |f|
-          f.flock(File::LOCK_EX)
-          f.write(count)
-          f.flush
-          f.flock(File::LOCK_UN)
-        end
-      end
-
-      def read_parallel_groups_count
-        File.open(FILE_WITH_PARALLEL_GROUPS_COUNT, 'r') do |f|
-          f.flock(File::LOCK_SH)
-          group_count = f.read
-          f.flock(File::LOCK_UN)
-          return group_count
-        end
       end
 
       def start_launch
         @root_node = Tree::TreeNode.new(SecureRandom.hex)
         @current_group_node = @root_node
-        p "Calling start_launch method"
-        # if ParallelTests.first_process?
-        if @@parallel_count.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i && ParallelTests.first_process?
-          description = ReportPortal::Settings.instance.description
-          description = ARGV.map { |arg| arg.include?('rp_uuid=') ? 'rp_uuid=[FILTERED]' : arg }.join(' ')
-          File.open(FILE_WITH_LAUNCH_ID, 'w+') do |f|
-            f.flock(File::LOCK_EX)
-            ReportPortal.start_launch(description)
-            f.write(ReportPortal.launch_id)
-            f.flush
-            f.flock(File::LOCK_UN)
+        description = ARGV.map { |arg| arg.include?('rp_uuid=') ? 'rp_uuid=[FILTERED]' : arg }.join(' ')
+        if attach_to_launch?
+          if @@parallel_count.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i && ParallelTests.first_process?
+            # Start launch and store launch id in FILE_WITH_LAUNCH_ID file
+            start_and_write_launch_id(description)
+            write_parallel_groups_count(ENV['PARALLEL_TEST_GROUPS'].to_i - 1)
+            @@parallel_count = read_parallel_groups_count
+            p "Single Launch created #{ReportPortal.launch_id}"
+          else
+            wait_for_launch
+            File.open(FILE_WITH_LAUNCH_ID, 'r') do |f|
+              f.flock(File::LOCK_SH)
+              ReportPortal.launch_id = f.read
+              f.flock(File::LOCK_UN)
+            end
           end
-          write_parallel_groups_count(ENV['PARALLEL_TEST_GROUPS'].to_i - 1)
-          @@parallel_count = read_parallel_groups_count
-          p 'Successfully launched'
-          p " Launch created #{ReportPortal.launch_id}"
         else
-          wait_for_launch
-          File.open(FILE_WITH_LAUNCH_ID, 'r') do |f|
-            f.flock(File::LOCK_SH)
-            ReportPortal.launch_id = f.read
-            f.flock(File::LOCK_UN)
-          end
+          ReportPortal.start_launch(description)
         end
       end
       
@@ -108,37 +72,56 @@ module ReportPortal
       end
 
       def example_group_finished(_group_notification)
-        if !@current_group_node.nil?
-          ReportPortal.finish_item(@current_group_node.content)
-          # @current_group_node = @current_group_node.parent
-        end
-        @@parallel_count_for_fininshing_launch = read_parallel_groups_count
-        if @@parallel_count_for_fininshing_launch.to_i == 0
-          $stdout.puts "Finishing launch #{ReportPortal.launch_id}"
-          p "Finishing launch #{ReportPortal.launch_id}"
-          ReportPortal.finish_launch(ReportPortal.now)
-        end
+        ReportPortal.finish_item(@current_group_node.content) unless @current_group_node.nil?
 
-        # p "Process First Process? #{ParallelTests.first_process?}"
-        # if ParallelTests.first_process?
-        #   p 'Skipping as it is first process'
-        #   return
-        # end
-        # if @@parallel_count_for_fininshing_launch.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i && ParallelTests.first_process?
-        #   @@parallel_count_for_fininshing_launch = read_parallel_groups_count
-        #   ParallelTests.wait_for_other_processes_to_finish
-        #   # File.delete(FILE_WITH_LAUNCH_ID)
-        #   # unless attach_to_launch?
-        #   $stdout.puts "Finishing launch #{ReportPortal.launch_id}"
-        #   p "Finishing launch #{ReportPortal.launch_id}"
-        #   # ReportPortal.close_child_items(nil)
-        #   ReportPortal.finish_launch(ReportPortal.now)
-        #   # end
-        # end
+        if attach_to_launch?
+          @@parallel_count_for_fininshing_launch = read_parallel_groups_count
+          return unless @@parallel_count_for_fininshing_launch.to_i.zero?
+
+          $stdout.puts "Finishing launch #{ReportPortal.launch_id}"
+        end
+        ReportPortal.finish_launch(ReportPortal.now)
       end
 
       def attach_to_launch?
         ReportPortal::Settings.instance.formatter_modes.include?('attach_to_launch')
+      end
+
+      def wait_for_launch
+        until File.exist?(FILE_WITH_LAUNCH_ID) do
+          p 'Waiting for Launch ID, Note: Launch ID will be created on First Process only'
+          sleep 1
+        end
+      end
+
+      def write_parallel_groups_count(count)
+        Dir.glob("#{Dir.pwd}/parallel_groups_for_*.lck").each { |file| File.delete(file) }
+        File.open(FILE_WITH_PARALLEL_GROUPS_COUNT, 'w+') do |f|
+          f.flock(File::LOCK_EX)
+          f.write(count)
+          f.flush
+          f.flock(File::LOCK_UN)
+        end
+      end
+
+      def read_parallel_groups_count
+        File.open(FILE_WITH_PARALLEL_GROUPS_COUNT, 'r') do |f|
+          f.flock(File::LOCK_SH)
+          group_count = f.read
+          f.flock(File::LOCK_UN)
+          return group_count
+        end
+      end
+
+      def start_and_write_launch_id(description)
+        Dir.glob("#{Dir.pwd}/parallel_launch_id_for_*.lck").each { |file| File.delete(file) }
+        File.open(FILE_WITH_LAUNCH_ID, 'w+') do |f|
+          f.flock(File::LOCK_EX)
+          ReportPortal.start_launch(description)
+          f.write(ReportPortal.launch_id)
+          f.flush
+          f.flock(File::LOCK_UN)
+        end
       end
     end
   end
