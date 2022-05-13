@@ -112,18 +112,29 @@ module ReportPortal
           ReportPortal.finish_item(@current_group_node.content)
           # @current_group_node = @current_group_node.parent
         end
-        p "Process First Process? #{ParallelTests.first_process?}"
-        if @@parallel_count_for_fininshing_launch.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i
-          @@parallel_count_for_fininshing_launch = read_parallel_groups_count
-          ParallelTests.wait_for_other_processes_to_finish
-          # File.delete(FILE_WITH_LAUNCH_ID)
-          # unless attach_to_launch?
+        @@parallel_count_for_fininshing_launch = read_parallel_groups_count
+        if @@parallel_count_for_fininshing_launch.to_i == 0
           $stdout.puts "Finishing launch #{ReportPortal.launch_id}"
           p "Finishing launch #{ReportPortal.launch_id}"
-          # ReportPortal.close_child_items(nil)
           ReportPortal.finish_launch(ReportPortal.now)
-          # end
         end
+
+        # p "Process First Process? #{ParallelTests.first_process?}"
+        # if ParallelTests.first_process?
+        #   p 'Skipping as it is first process'
+        #   return
+        # end
+        # if @@parallel_count_for_fininshing_launch.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i && ParallelTests.first_process?
+        #   @@parallel_count_for_fininshing_launch = read_parallel_groups_count
+        #   ParallelTests.wait_for_other_processes_to_finish
+        #   # File.delete(FILE_WITH_LAUNCH_ID)
+        #   # unless attach_to_launch?
+        #   $stdout.puts "Finishing launch #{ReportPortal.launch_id}"
+        #   p "Finishing launch #{ReportPortal.launch_id}"
+        #   # ReportPortal.close_child_items(nil)
+        #   ReportPortal.finish_launch(ReportPortal.now)
+        #   # end
+        # end
       end
 
       def attach_to_launch?
