@@ -10,14 +10,12 @@ module ReportPortal
     class ParallelFormatter < Report
 
       FILE_WITH_LAUNCH_ID = Dir.pwd + "/parallel_launch_id_for_#{Process.ppid}.lck"
-      FILE_WITH_PARALLEL_GROUPS_COUNT = Dir.pwd + "/parallel_groups_for_#{Process.ppid}.lck"
 
       @@parallel_count = ENV['PARALLEL_TEST_GROUPS'].to_i
-      @@parallel_count_for_fininshing_launch = @@parallel_count
 
       ::RSpec::Core::Formatters.register self, :example_group_started, :example_group_finished,
                                          :example_started, :example_passed, :example_failed,
-                                         :example_pending, :message
+                                         :example_pending, :message, :stop
 
       def initialize(_output)
         ENV['REPORT_PORTAL_USED'] = 'true'
@@ -31,8 +29,7 @@ module ReportPortal
           if @@parallel_count.to_i == ENV['PARALLEL_TEST_GROUPS'].to_i && ParallelTests.first_process?
             # Start launch and store launch id in FILE_WITH_LAUNCH_ID file
             start_and_write_launch_id(description)
-            write_parallel_groups_count(ENV['PARALLEL_TEST_GROUPS'].to_i - 1)
-            @@parallel_count = read_parallel_groups_count
+            @@parallel_count -= 1
             p "Single Launch created #{ReportPortal.launch_id}"
           else
             wait_for_launch
@@ -73,10 +70,12 @@ module ReportPortal
 
       def example_group_finished(_group_notification)
         ReportPortal.finish_item(@current_group_node.content) unless @current_group_node.nil?
-
+        ReportPortal.finish_launch(ReportPortal.now) unless attach_to_launch?
+      end
+      
+      def stop(_stop_notification)
         if attach_to_launch?
-          @@parallel_count_for_fininshing_launch = read_parallel_groups_count
-          return unless @@parallel_count_for_fininshing_launch.to_i.zero?
+          return unless ParallelTests.last_process?
 
           $stdout.puts "Finishing launch #{ReportPortal.launch_id}"
         end
@@ -91,25 +90,6 @@ module ReportPortal
         until File.exist?(FILE_WITH_LAUNCH_ID) do
           p 'Waiting for Launch ID, Note: Launch ID will be created on First Process only'
           sleep 1
-        end
-      end
-
-      def write_parallel_groups_count(count)
-        Dir.glob("#{Dir.pwd}/parallel_groups_for_*.lck").each { |file| File.delete(file) }
-        File.open(FILE_WITH_PARALLEL_GROUPS_COUNT, 'w+') do |f|
-          f.flock(File::LOCK_EX)
-          f.write(count)
-          f.flush
-          f.flock(File::LOCK_UN)
-        end
-      end
-
-      def read_parallel_groups_count
-        File.open(FILE_WITH_PARALLEL_GROUPS_COUNT, 'r') do |f|
-          f.flock(File::LOCK_SH)
-          group_count = f.read
-          f.flock(File::LOCK_UN)
-          return group_count
         end
       end
 
